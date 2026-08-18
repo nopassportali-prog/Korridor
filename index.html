@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff" id="themeColorMeta">
+<title>Korridor</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root{
+    --bg:#ffffff;
+    --ink:#111111;
+    --muted:#8a8a8e;
+    --line:#e5e5e7;
+    --cell-a:#ffffff;
+    --cell-b:#f4f4f5;
+    --surface:#f7f7f8;
+    --accent:#e0342c;
+    --accent-ink:#ffffff;
+    --p1:#111111;
+    --p2:#e0342c;
+    --wall:#111111;
+    --wall-ghost:rgba(224,52,44,.30);
+    --shadow:0 1px 2px rgba(0,0,0,.06);
+  }
+  html[data-theme="dark"]{
+    --bg:#000000;
+    --ink:#ffffff;
+    --muted:#8a8a8e;
+    --line:#232325;
+    --cell-a:#000000;
+    --cell-b:#111113;
+    --surface:#0d0d0f;
+    --accent:#ff453a;
+    --accent-ink:#ffffff;
+    --p1:#ffffff;
+    --p2:#ff453a;
+    --wall:#ffffff;
+    --wall-ghost:rgba(255,69,58,.30);
+    --shadow:none;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overflow-x:hidden;
+    user-select:none;
+    transition:background .25s ease, color .25s ease;
+  }
+
+  header{
+    width:100%;
+    max-width:480px;
+    padding:22px 20px 6px;
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+  }
+  .title-block h1{
+    margin:0;
+    font-size:26px;
+    font-weight:700;
+    letter-spacing:-.02em;
+    color:var(--ink);
+  }
+  .title-block h1 span{color:var(--accent);}
+  .title-block .sub{
+    margin-top:2px;
+    font-size:12px;
+    font-weight:500;
+    letter-spacing:.01em;
+    color:var(--muted);
+  }
+
+  .theme-toggle{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:3px;
+    background:var(--surface);
+    margin-top:2px;
+  }
+  .theme-toggle button{
+    border:none;
+    background:transparent;
+    color:var(--muted);
+    font-size:13px;
+    padding:6px 10px;
+    border-radius:999px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  .theme-toggle button.active{
+    background:var(--ink);
+    color:var(--bg);
+  }
+
+  .panel{
+    width:100%;
+    max-width:480px;
+    padding:14px 20px 4px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+
+  .mode-row{
+    display:flex;
+    gap:8px;
+  }
+  .mode-btn{
+    flex:1;
+    padding:10px 6px;
+    border-radius:10px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--muted);
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:-.01em;
+    cursor:pointer;
+  }
+  .mode-btn.active{
+    background:var(--ink);
+    color:var(--bg);
+    border-color:var(--ink);
+  }
+
+  .hud{
+    display:flex;
+    gap:10px;
+  }
+  .player-card{
+    flex:1;
+    border-radius:12px;
+    padding:10px 12px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:10px;
+    position:relative;
+    transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  .player-card.turn{
+    border-color:var(--turn-color, var(--ink));
+    box-shadow:0 0 0 1px var(--turn-color, var(--ink));
+  }
+  .dot{
+    width:16px;height:16px;border-radius:50%;
+    flex-shrink:0;
+  }
+  .p1 .dot{background:var(--p1); border:1px solid var(--line);}
+  .p2 .dot{background:var(--p2);}
+  .card-text{display:flex; flex-direction:column; line-height:1.25;}
+  .card-name{font-size:13px; font-weight:600; color:var(--ink);}
+  .card-walls{font-size:11px; color:var(--muted);}
+
+  .board-wrap{
+    width:100%;
+    max-width:480px;
+    padding:10px 16px 4px;
+    display:flex;
+    justify-content:center;
+  }
+  #board{
+    position:relative;
+    aspect-ratio:1/1;
+    width:100%;
+    max-width:440px;
+    background:var(--bg);
+    border-radius:14px;
+    padding:3%;
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+  }
+  #grid{
+    position:relative;
+    width:100%;
+    height:100%;
+    display:grid;
+    grid-template-columns:repeat(9,1fr);
+    grid-template-rows:repeat(9,1fr);
+    border-radius:4px;
+    overflow:visible;
+  }
+  .cell{
+    position:relative;
+    border:1px solid var(--line);
+  }
+  .cell.a{background:var(--cell-a);}
+  .cell.b{background:var(--cell-b);}
+  .cell.legal{cursor:pointer;}
+  .cell.legal::before{
+    content:"";
+    position:absolute;
+    inset:34%;
+    border-radius:50%;
+    background:var(--wall-ghost);
+    animation:pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse{
+    0%,100%{transform:scale(.8); opacity:.5;}
+    50%{transform:scale(1.05); opacity:.95;}
+  }
+  .pawn{
+    position:absolute;
+    inset:18%;
+    border-radius:50%;
+    z-index:5;
+    transition:left .2s cubic-bezier(.4,0,.2,1), top .2s cubic-bezier(.4,0,.2,1);
+  }
+  .pawn.p1{background:var(--p1); border:2px solid var(--bg); box-shadow:0 0 0 1px var(--line);}
+  .pawn.p2{background:var(--p2);}
+
+  .wall-drag-surface{
+    position:absolute;
+    inset:0;
+    z-index:6;
+    background:transparent;
+    touch-action:none;
+  }
+  .wall-piece{
+    position:absolute;
+    background:var(--wall);
+    border-radius:2px;
+    z-index:4;
+  }
+  .wall-preview{
+    position:absolute;
+    z-index:5;
+    background:transparent;
+    border:2.5px solid #2ecc40;
+    border-radius:3px;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .08s ease, border-color .1s ease;
+  }
+  .wall-preview.invalid{border-color:var(--muted);}
+  .wall-preview.show{opacity:1;}
+  .wall-cursor{
+    position:absolute;
+    z-index:7;
+    background:transparent;
+    border:2.5px solid var(--accent);
+    border-radius:3px;
+    opacity:0;
+    pointer-events:none;
+  }
+  .wall-cursor.show{opacity:1;}
+  .wall-preview.show{opacity:1;}
+
+  .controls{
+    width:100%;
+    max-width:480px;
+    padding:6px 20px 4px;
+    display:flex;
+    gap:8px;
+  }
+  .controls:first-of-type{padding-top:12px;}
+  .ctrl-btn{
+    flex:1;
+    padding:12px 8px;
+    border-radius:12px;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:-.01em;
+    cursor:pointer;
+  }
+  .ctrl-btn.primary{
+    background:var(--accent);
+    border-color:var(--accent);
+    color:var(--accent-ink);
+  }
+  .ctrl-btn.interaction-btn.active{
+    background:var(--ink);
+    border-color:var(--ink);
+    color:var(--bg);
+  }
+  .ctrl-btn:disabled{opacity:.35; cursor:not-allowed;}
+
+  .hint{
+    max-width:480px;
+    padding:10px 24px 20px;
+    text-align:center;
+    font-size:12px;
+    color:var(--muted);
+    line-height:1.5;
+  }
+
+  .toast{
+    position:fixed;
+    left:50%; top:14px;
+    transform:translateX(-50%) translateY(-140%);
+    background:var(--ink);
+    color:var(--bg);
+    padding:10px 18px;
+    border-radius:10px;
+    font-size:13px;
+    font-weight:600;
+    z-index:50;
+    transition:transform .3s ease;
+    pointer-events:none;
+  }
+  .toast.show{transform:translateX(-50%) translateY(0);}
+
+  .overlay{
+    position:fixed; inset:0;
+    background:rgba(0,0,0,.5);
+    display:flex; align-items:center; justify-content:center;
+    z-index:60;
+    opacity:0; pointer-events:none;
+    transition:opacity .25s ease;
+  }
+  html[data-theme="dark"] .overlay{background:rgba(255,255,255,.08);}
+  .overlay.show{opacity:1; pointer-events:auto;}
+  .overlay-card{
+    background:var(--bg);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:32px 28px;
+    text-align:center;
+    max-width:300px;
+    box-shadow:0 20px 40px rgba(0,0,0,.2);
+  }
+  .overlay-card .win-dot{
+    width:36px;height:36px;border-radius:50%;
+    margin:0 auto 16px;
+  }
+  .overlay-card h2{margin:0 0 6px; font-size:19px; font-weight:700; letter-spacing:-.01em; color:var(--ink);}
+  .overlay-card p{margin:0 0 20px; font-size:13px; color:var(--muted);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="title-block">
+    <h1>Kor<span>rid</span>or</h1>
+    <div class="sub">Erreiche die gegenüberliegende Seite</div>
+  </div>
+  <div class="theme-toggle" id="themeToggle">
+    <button data-theme="light" class="active">Hell</button>
+    <button data-theme="dark">Dunkel</button>
+  </div>
+</header>
+
+<div class="panel">
+  <div class="mode-row">
+    <button class="mode-btn active" data-mode="ai">Gegen KI</button>
+    <button class="mode-btn" data-mode="pvp">Zu zweit</button>
+  </div>
+  <div class="hud">
+    <div class="player-card p1" id="card-p1">
+      <div class="dot"></div>
+      <div class="card-text">
+        <div class="card-name" id="name-p1">Du</div>
+        <div class="card-walls" id="walls-p1">Mauern: 10</div>
+      </div>
+    </div>
+    <div class="player-card p2" id="card-p2">
+      <div class="dot"></div>
+      <div class="card-text">
+        <div class="card-name" id="name-p2">KI</div>
+        <div class="card-walls" id="walls-p2">Mauern: 10</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="board-wrap">
+  <div id="board"><div id="grid"></div></div>
+</div>
+
+<div class="controls">
+  <button class="ctrl-btn interaction-btn active" id="moveModeBtn" data-mode="move">Ziehen</button>
+  <button class="ctrl-btn interaction-btn" id="hOrientBtn" data-mode="h">Waagerecht</button>
+  <button class="ctrl-btn interaction-btn" id="vOrientBtn" data-mode="v">Senkrecht</button>
+</div>
+<div class="controls">
+  <button class="ctrl-btn" id="undoBtn">Zurück</button>
+  <button class="ctrl-btn primary" id="restartBtn">Neu</button>
+</div>
+
+<div class="hint" id="hint">Tippe ein markiertes Feld an, um deine Figur zu bewegen.</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="overlay" id="overlay">
+  <div class="overlay-card">
+    <div class="win-dot" id="winDot"></div>
+    <h2 id="winTitle">Gewonnen!</h2>
+    <p id="winSub"></p>
+    <button class="ctrl-btn primary" id="playAgainBtn">Nochmal spielen</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const N = 9;
+  const WALLS_PER_PLAYER = 10;
+
+  // ---------- theme ----------
+  function applyTheme(mode){
+    document.documentElement.setAttribute('data-theme', mode);
+    document.getElementById('themeColorMeta').content = mode==='dark' ? '#000000' : '#ffffff';
+    document.querySelectorAll('.theme-toggle button').forEach(b=>{
+      b.classList.toggle('active', b.dataset.theme===mode);
+    });
+  }
+  document.querySelectorAll('.theme-toggle button').forEach(b=>{
+    b.addEventListener('click', ()=>applyTheme(b.dataset.theme));
+  });
+  const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(prefersDark ? 'dark' : 'light');
+
+  // ---------- state ----------
+  let state;
+
+  function freshState(){
+    return {
+      pos: [ [8,4], [0,4] ],
+      wallsLeft: [WALLS_PER_PLAYER, WALLS_PER_PLAYER],
+      hWalls: new Set(),
+      vWalls: new Set(),
+      turn: 0,
+      mode: 'ai',
+      interactionMode: 'move',
+      history: [],
+      winner: null,
+      aiThinking: false
+    };
+  }
+
+  function key(i,j){ return i+','+j; }
+
+  // ---------- rules engine ----------
+  function inBounds(r,c){ return r>=0 && r<N && c>=0 && c<N; }
+
+  function wallBlocks(r,c,dr,dc,hSet,vSet){
+    if(dr === -1){
+      const i = r-1;
+      if(i<0) return true;
+      return hSet.has(key(i,c-1)) || hSet.has(key(i,c));
+    }
+    if(dr === 1){
+      const i = r;
+      if(i>7) return true;
+      return hSet.has(key(i,c-1)) || hSet.has(key(i,c));
+    }
+    if(dc === -1){
+      const j = c-1;
+      if(j<0) return true;
+      return vSet.has(key(r-1,j)) || vSet.has(key(r,j));
+    }
+    if(dc === 1){
+      const j = c;
+      if(j>7) return true;
+      return vSet.has(key(r-1,j)) || vSet.has(key(r,j));
+    }
+    return false;
+  }
+
+  const DIRS = [[-1,0],[1,0],[0,-1],[0,1]];
+
+  function openNeighbors(r,c,hSet,vSet){
+    const out = [];
+    for(const [dr,dc] of DIRS){
+      const nr=r+dr, nc=c+dc;
+      if(!inBounds(nr,nc)) continue;
+      if(wallBlocks(r,c,dr,dc,hSet,vSet)) continue;
+      out.push([nr,nc,dr,dc]);
+    }
+    return out;
+  }
+
+  function bfsPathLen(startR, startC, goalRow, hSet, vSet){
+    const visited = new Set([key(startR,startC)]);
+    let frontier = [[startR,startC]];
+    let dist = 0;
+    if(startR === goalRow) return 0;
+    while(frontier.length){
+      const next = [];
+      for(const [r,c] of frontier){
+        for(const [nr,nc] of openNeighbors(r,c,hSet,vSet)){
+          const k = key(nr,nc);
+          if(visited.has(k)) continue;
+          visited.add(k);
+          if(nr === goalRow) return dist+1;
+          next.push([nr,nc]);
+        }
+      }
+      frontier = next;
+      dist++;
+      if(dist>200) return Infinity;
+    }
+    return Infinity;
+  }
+
+  function goalRowFor(player){ return player===0 ? 0 : 8; }
+
+  function legalPawnMoves(player, st){
+    const [r,c] = st.pos[player];
+    const opp = st.pos[1-player];
+    const results = [];
+    const seen = new Set();
+    for(const [nr,nc,dr,dc] of openNeighbors(r,c,st.hWalls,st.vWalls)){
+      if(opp[0]===nr && opp[1]===nc){
+        const jr = nr+dr, jc = nc+dc;
+        if(inBounds(jr,jc) && !wallBlocks(nr,nc,dr,dc,st.hWalls,st.vWalls)){
+          const k=key(jr,jc);
+          if(!seen.has(k)){seen.add(k); results.push([jr,jc]);}
+        } else {
+          const perp = dr===0 ? [[-1,0],[1,0]] : [[0,-1],[0,1]];
+          for(const [pdr,pdc] of perp){
+            const dr2=nr+pdr, dc2=nc+pdc;
+            if(!inBounds(dr2,dc2)) continue;
+            if(wallBlocks(nr,nc,pdr,pdc,st.hWalls,st.vWalls)) continue;
+            const k=key(dr2,dc2);
+            if(!seen.has(k)){seen.add(k); results.push([dr2,dc2]);}
+          }
+        }
+      } else {
+        const k=key(nr,nc);
+        if(!seen.has(k)){seen.add(k); results.push([nr,nc]);}
+      }
+    }
+    return results;
+  }
+
+  function wallOverlaps(type,i,j,st){
+    if(i<0||i>7||j<0||j>7) return true;
+    if(type==='h'){
+      if(st.hWalls.has(key(i,j-1))||st.hWalls.has(key(i,j))||st.hWalls.has(key(i,j+1))) return true;
+      if(st.vWalls.has(key(i,j))) return true;
+    } else {
+      if(st.vWalls.has(key(i-1,j))||st.vWalls.has(key(i,j))||st.vWalls.has(key(i+1,j))) return true;
+      if(st.hWalls.has(key(i,j))) return true;
+    }
+    return false;
+  }
+
+  function canPlaceWallFor(type,i,j,player,st){
+    if(st.wallsLeft[player] <= 0) return false;
+    if(wallOverlaps(type,i,j,st)) return false;
+    const hSet = new Set(st.hWalls), vSet = new Set(st.vWalls);
+    if(type==='h') hSet.add(key(i,j)); else vSet.add(key(i,j));
+    const p0 = bfsPathLen(st.pos[0][0], st.pos[0][1], goalRowFor(0), hSet, vSet);
+    const p1 = bfsPathLen(st.pos[1][0], st.pos[1][1], goalRowFor(1), hSet, vSet);
+    return isFinite(p0) && isFinite(p1);
+  }
+  function canPlaceWall(type,i,j,st){
+    return canPlaceWallFor(type,i,j,st.turn,st);
+  }
+
+  // ---------- DOM build ----------
+  const grid = document.getElementById('grid');
+  const hintEl = document.getElementById('hint');
+  const toastEl = document.getElementById('toast');
+  const previewEl = document.createElement('div');
+  previewEl.className = 'wall-preview';
+  const cursorEl = document.createElement('div');
+  cursorEl.className = 'wall-cursor';
+  const dragSurface = document.createElement('div');
+  dragSurface.className = 'wall-drag-surface';
+
+  function buildGrid(){
+    grid.innerHTML = '';
+    for(let r=0;r<N;r++){
+      for(let c=0;c<N;c++){
+        const cell = document.createElement('div');
+        cell.className = 'cell ' + (((r+c)%2===0)?'a':'b');
+        if(r===0) cell.classList.add('goal-top');
+        if(r===8) cell.classList.add('goal-bottom');
+        cell.dataset.r = r; cell.dataset.c = c;
+        cell.addEventListener('click', onCellClick);
+        grid.appendChild(cell);
+      }
+    }
+    grid.appendChild(dragSurface);
+    grid.appendChild(previewEl);
+    grid.appendChild(cursorEl);
+    dragSurface.addEventListener('pointerdown', onDragSurfacePointerDown);
+  }
+
+  let pawnEls = [];
+  function ensurePawns(){
+    document.querySelectorAll('.pawn').forEach(p=>p.remove());
+    pawnEls = [0,1].map(p=>{
+      const el = document.createElement('div');
+      el.className = 'pawn p'+(p+1);
+      grid.appendChild(el);
+      return el;
+    });
+  }
+
+  function renderPawns(){
+    const cellPct = 100/9;
+    for(let p=0;p<2;p++){
+      const [r,c] = state.pos[p];
+      pawnEls[p].style.left = (c*cellPct)+'%';
+      pawnEls[p].style.top = (r*cellPct)+'%';
+      pawnEls[p].style.width = cellPct+'%';
+      pawnEls[p].style.height = cellPct+'%';
+    }
+  }
+
+  function renderWalls(){
+    document.querySelectorAll('.wall-piece').forEach(w=>w.remove());
+    const cellPct = 100/9;
+    const thickness = cellPct*0.18;
+    state.hWalls.forEach(k=>{
+      const [i,j] = k.split(',').map(Number);
+      const w = document.createElement('div');
+      w.className='wall-piece';
+      w.style.left=(j*cellPct)+'%';
+      w.style.width=(cellPct*2)+'%';
+      w.style.top=((i+1)*cellPct - thickness/2)+'%';
+      w.style.height=thickness+'%';
+      grid.appendChild(w);
+    });
+    state.vWalls.forEach(k=>{
+      const [i,j] = k.split(',').map(Number);
+      const w = document.createElement('div');
+      w.className='wall-piece';
+      w.style.top=(i*cellPct)+'%';
+      w.style.height=(cellPct*2)+'%';
+      w.style.left=((j+1)*cellPct - thickness/2)+'%';
+      w.style.width=thickness+'%';
+      grid.appendChild(w);
+    });
+  }
+
+  function clearLegalHighlights(){
+    document.querySelectorAll('.cell.legal').forEach(c=>c.classList.remove('legal'));
+  }
+
+  function renderLegalMoves(){
+    clearLegalHighlights();
+    if(state.interactionMode!=='move' || state.winner!==null) return;
+    if(state.mode==='ai' && state.turn===1) return;
+    const moves = legalPawnMoves(state.turn, state);
+    for(const [r,c] of moves){
+      const cell = grid.querySelector('.cell[data-r="'+r+'"][data-c="'+c+'"]');
+      if(cell) cell.classList.add('legal');
+    }
+  }
+
+  function updateHUD(){
+    document.getElementById('walls-p1').textContent = 'Mauern: '+state.wallsLeft[0];
+    document.getElementById('walls-p2').textContent = 'Mauern: '+state.wallsLeft[1];
+    document.getElementById('name-p2').textContent = state.mode==='ai' ? 'KI' : 'Spieler 2';
+    document.getElementById('card-p1').classList.toggle('turn', state.turn===0);
+    document.getElementById('card-p2').classList.toggle('turn', state.turn===1);
+    document.getElementById('card-p1').style.setProperty('--turn-color','var(--p1)');
+    document.getElementById('card-p2').style.setProperty('--turn-color','var(--p2)');
+    const noWalls = state.wallsLeft[state.turn]<=0;
+    document.getElementById('hOrientBtn').disabled = noWalls;
+    document.getElementById('vOrientBtn').disabled = noWalls;
+    document.querySelectorAll('.interaction-btn').forEach(b=>{
+      b.classList.toggle('active', b.dataset.mode===state.interactionMode);
+    });
+    dragSurface.style.pointerEvents = (state.interactionMode!=='move') ? 'auto' : 'none';
+    document.getElementById('undoBtn').disabled = state.history.length===0;
+    if(state.winner!==null){
+      hintEl.textContent = (state.winner===0? (state.mode==='ai'?'Du hast':'Spieler 1 hat') : (state.mode==='ai'?'Die KI hat':'Spieler 2 hat')) + ' gewonnen!';
+    } else if(state.mode==='ai' && state.turn===1){
+      hintEl.textContent = 'Die KI überlegt …';
+    } else if(state.interactionMode!=='move'){
+      hintEl.textContent = 'Auf dem Feld ziehen: der Balken folgt deinem Finger, der grüne Schatten zeigt die Zielposition. Loslassen platziert die Mauer.';
+    } else {
+      hintEl.textContent = 'Tippe ein markiertes Feld an, um deine Figur zu bewegen.';
+    }
+  }
+
+  function showToast(msg){
+    toastEl.textContent = msg;
+    toastEl.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(()=>toastEl.classList.remove('show'), 1600);
+  }
+
+  function render(){
+    renderPawns();
+    renderWalls();
+    renderLegalMoves();
+    updateHUD();
+    if(state.winner!==null) showWinOverlay();
+  }
+
+  function snapshot(){
+    return {
+      pos:[state.pos[0].slice(), state.pos[1].slice()],
+      wallsLeft: state.wallsLeft.slice(),
+      hWalls: new Set(state.hWalls),
+      vWalls: new Set(state.vWalls),
+      turn: state.turn
+    };
+  }
+
+  function pushHistory(){
+    state.history.push(snapshot());
+  }
+
+  function checkWin(){
+    if(state.pos[0][0] === goalRowFor(0)){ state.winner = 0; return true; }
+    if(state.pos[1][0] === goalRowFor(1)){ state.winner = 1; return true; }
+    return false;
+  }
+
+  function onCellClick(e){
+    if(state.interactionMode!=='move' || state.winner!==null) return;
+    if(state.mode==='ai' && state.turn===1) return;
+    const r = +e.currentTarget.dataset.r, c = +e.currentTarget.dataset.c;
+    const moves = legalPawnMoves(state.turn, state);
+    if(!moves.some(m=>m[0]===r&&m[1]===c)) return;
+    pushHistory();
+    state.pos[state.turn] = [r,c];
+    if(checkWin()){ render(); return; }
+    state.turn = 1-state.turn;
+    render();
+    maybeAiMove();
+  }
+
+  // Orientation is fixed beforehand via the "Waagerecht"/"Senkrecht" buttons.
+  // The red bar follows the finger exactly, wherever it goes on the board.
+  // The green bar snaps to the nearest valid wall position - that's where
+  // the wall actually lands when the finger lifts.
+  function nearestIntersection(xPct, yPct){
+    const cellPct = 100/9;
+    let j = Math.round(xPct/cellPct) - 1;
+    let i = Math.round(yPct/cellPct) - 1;
+    i = Math.max(0, Math.min(7, i));
+    j = Math.max(0, Math.min(7, j));
+    return {i,j};
+  }
+
+  function updatePreview(type,i,j,valid){
+    const cellPct = 100/9;
+    const thickness = cellPct*0.18;
+    previewEl.classList.add('show');
+    previewEl.classList.toggle('invalid', !valid);
+    if(type==='h'){
+      previewEl.style.left=(j*cellPct)+'%';
+      previewEl.style.width=(cellPct*2)+'%';
+      previewEl.style.top=((i+1)*cellPct - thickness/2)+'%';
+      previewEl.style.height=thickness+'%';
+    } else {
+      previewEl.style.top=(i*cellPct)+'%';
+      previewEl.style.height=(cellPct*2)+'%';
+      previewEl.style.left=((j+1)*cellPct - thickness/2)+'%';
+      previewEl.style.width=thickness+'%';
+    }
+  }
+
+  function updateCursor(type, xPct, yPct){
+    const cellPct = 100/9;
+    const length = cellPct*2;
+    const thickness = cellPct*0.18;
+    cursorEl.classList.add('show');
+    if(type==='h'){
+      cursorEl.style.width=length+'%';
+      cursorEl.style.height=thickness+'%';
+      cursorEl.style.left=(xPct - length/2)+'%';
+      cursorEl.style.top=(yPct - thickness/2)+'%';
+    } else {
+      cursorEl.style.height=length+'%';
+      cursorEl.style.width=thickness+'%';
+      cursorEl.style.top=(yPct - length/2)+'%';
+      cursorEl.style.left=(xPct - thickness/2)+'%';
+    }
+  }
+
+  function hidePreview(){
+    previewEl.classList.remove('show');
+    cursorEl.classList.remove('show');
+  }
+
+  function onDragSurfacePointerDown(e){
+    if(state.interactionMode==='move' || state.winner!==null) return;
+    if(state.mode==='ai' && state.turn===1) return;
+    e.preventDefault();
+    const type = state.interactionMode;
+    dragSurface.setPointerCapture(e.pointerId);
+    const rect = grid.getBoundingClientRect();
+
+    function update(ev){
+      let xPct = (ev.clientX - rect.left) / rect.width * 100;
+      let yPct = (ev.clientY - rect.top) / rect.height * 100;
+      xPct = Math.max(0, Math.min(100, xPct));
+      yPct = Math.max(0, Math.min(100, yPct));
+      const {i,j} = nearestIntersection(xPct, yPct);
+      const valid = canPlaceWallFor(type,i,j,state.turn,state);
+      updateCursor(type, xPct, yPct);
+      updatePreview(type,i,j,valid);
+      return {type,i,j,valid};
+    }
+
+    let last = update(e);
+
+    function onMove(ev){ last = update(ev); }
+    function onUp(){
+      dragSurface.removeEventListener('pointermove', onMove);
+      dragSurface.removeEventListener('pointerup', onUp);
+      dragSurface.removeEventListener('pointercancel', onCancel);
+      hidePreview();
+      if(last.valid){
+        pushHistory();
+        (last.type==='h'?state.hWalls:state.vWalls).add(key(last.i,last.j));
+        state.wallsLeft[state.turn]--;
+        state.interactionMode = 'move';
+        state.turn = 1-state.turn;
+        render();
+        maybeAiMove();
+      } else {
+        showToast('Mauer hier nicht erlaubt');
+        render();
+      }
+    }
+    function onCancel(){
+      dragSurface.removeEventListener('pointermove', onMove);
+      dragSurface.removeEventListener('pointerup', onUp);
+      dragSurface.removeEventListener('pointercancel', onCancel);
+      hidePreview();
+    }
+    dragSurface.addEventListener('pointermove', onMove);
+    dragSurface.addEventListener('pointerup', onUp);
+    dragSurface.addEventListener('pointercancel', onCancel);
+  }
+
+  document.querySelectorAll('.interaction-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(state.winner!==null) return;
+      if(state.mode==='ai' && state.turn===1) return;
+      state.interactionMode = btn.dataset.mode;
+      hidePreview();
+      render();
+    });
+  });
+
+  document.getElementById('undoBtn').addEventListener('click', ()=>{
+    if(!state.history.length) return;
+    const snap = state.history.pop();
+    state.pos = snap.pos; state.wallsLeft = snap.wallsLeft;
+    state.hWalls = snap.hWalls; state.vWalls = snap.vWalls; state.turn = snap.turn;
+    state.winner = null; state.interactionMode='move';
+    hidePreview();
+    render();
+  });
+
+  document.getElementById('restartBtn').addEventListener('click', ()=>{
+    const mode = state.mode;
+    state = freshState();
+    state.mode = mode;
+    ensurePawns();
+    render();
+  });
+
+  document.getElementById('playAgainBtn').addEventListener('click', ()=>{
+    document.getElementById('overlay').classList.remove('show');
+    const mode = state.mode;
+    state = freshState();
+    state.mode = mode;
+    ensurePawns();
+    render();
+  });
+
+  document.querySelectorAll('.mode-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      state = freshState();
+      state.mode = btn.dataset.mode;
+      ensurePawns();
+      document.getElementById('overlay').classList.remove('show');
+      render();
+    });
+  });
+
+  function showWinOverlay(){
+    const overlay = document.getElementById('overlay');
+    const dot = document.getElementById('winDot');
+    const title = document.getElementById('winTitle');
+    const sub = document.getElementById('winSub');
+    const iAmP1 = state.winner===0;
+    dot.style.background = iAmP1 ? 'var(--p1)' : 'var(--p2)';
+    title.textContent = state.mode==='ai'
+      ? (iAmP1 ? 'Du hast gewonnen!' : 'Die KI gewinnt')
+      : ('Spieler '+(state.winner+1)+' gewinnt!');
+    sub.textContent = 'Der Weg zur anderen Seite ist frei.';
+    setTimeout(()=>overlay.classList.add('show'), 350);
+  }
+
+  // ---------- AI ----------
+  function maybeAiMove(){
+    if(state.mode!=='ai' || state.turn!==1 || state.winner!==null) return;
+    state.aiThinking = true;
+    updateHUD();
+    setTimeout(aiTakeTurn, 550);
+  }
+
+  function evalScore(st, player){
+    const opp = 1-player;
+    const myPath = bfsPathLen(st.pos[player][0], st.pos[player][1], goalRowFor(player), st.hWalls, st.vWalls);
+    const oppPath = bfsPathLen(st.pos[opp][0], st.pos[opp][1], goalRowFor(opp), st.hWalls, st.vWalls);
+    if(!isFinite(myPath)) return -1000;
+    if(!isFinite(oppPath)) return 1000;
+    return (oppPath - myPath) + 0.15*(st.wallsLeft[player]-st.wallsLeft[opp]);
+  }
+
+  function wallCandidateZones(st){
+    const zones = new Set();
+    function addAround(r,c){
+      for(let di=-1; di<=1; di++){
+        for(let dj=-1; dj<=1; dj++){
+          const i=r+di, j=c+dj;
+          if(i>=0 && i<=7 && j>=0 && j<=7) zones.add(i+','+j);
+        }
+      }
+    }
+    addAround(st.pos[0][0], st.pos[0][1]);
+    addAround(st.pos[1][0], st.pos[1][1]);
+    // also cover cells a few steps ahead on each player's route toward their goal,
+    // so the AI can plan cuts further down the path, not just next to the pawns
+    const proj0 = [Math.min(8, st.pos[0][0]+3), st.pos[0][1]];
+    const proj1 = [Math.max(0, st.pos[1][0]-3), st.pos[1][1]];
+    addAround(proj0[0], proj0[1]);
+    addAround(proj1[0], proj1[1]);
+    return Array.from(zones).map(k=>{ const [i,j]=k.split(',').map(Number); return {i,j}; });
+  }
+
+  function candidateActionsFor(player, st){
+    const actions = [];
+    for(const [r,c] of legalPawnMoves(player, st)){
+      actions.push({type:'move', r, c});
+    }
+    if(st.wallsLeft[player] > 0){
+      for(const {i,j} of wallCandidateZones(st)){
+        for(const wtype of ['h','v']){
+          if(canPlaceWallFor(wtype,i,j,player,st)){
+            actions.push({type:'wall', wtype, i, j});
+          }
+        }
+      }
+    }
+    return actions;
+  }
+
+  function applyAction(st, player, action){
+    const ns = {
+      pos:[st.pos[0].slice(), st.pos[1].slice()],
+      wallsLeft: st.wallsLeft.slice(),
+      hWalls: new Set(st.hWalls),
+      vWalls: new Set(st.vWalls)
+    };
+    if(action.type==='move'){
+      ns.pos[player] = [action.r, action.c];
+    } else {
+      (action.wtype==='h'?ns.hWalls:ns.vWalls).add(key(action.i,action.j));
+      ns.wallsLeft[player]--;
+    }
+    return ns;
+  }
+
+  function bestGreedyAction(player, st){
+    let best=null, bestScore=-Infinity;
+    for(const action of candidateActionsFor(player, st)){
+      const ns = applyAction(st, player, action);
+      const sc = evalScore(ns, player);
+      if(sc > bestScore){ bestScore=sc; best=action; }
+    }
+    return {action:best, score:bestScore};
+  }
+
+  // AI looks two half-moves ahead: for each of its own promising options it
+  // assumes the opponent then plays their single best reply, and picks the
+  // option that leaves the AI best off after that reply.
+  function aiTakeTurn(){
+    const st = state;
+    const me = 1, opp = 0;
+
+    const myActions = candidateActionsFor(me, st);
+    const scored = myActions.map(a=>{
+      const ns = applyAction(st, me, a);
+      return {a, ns, imm: evalScore(ns, me)};
+    }).sort((x,y)=>y.imm-x.imm);
+
+    const K = Math.min(10, scored.length);
+    let bestAction=null, bestVal=-Infinity;
+    for(let idx=0; idx<K; idx++){
+      const {a, ns} = scored[idx];
+      const oppReply = bestGreedyAction(opp, ns);
+      const afterState = oppReply.action ? applyAction(ns, opp, oppReply.action) : ns;
+      const val = evalScore(afterState, me);
+      if(val > bestVal){ bestVal = val; bestAction = a; }
+    }
+    if(!bestAction && scored.length){ bestAction = scored[0].a; }
+
+    pushHistory();
+    if(bestAction){
+      if(bestAction.type==='move'){
+        st.pos[me] = [bestAction.r, bestAction.c];
+      } else {
+        (bestAction.wtype==='h'?st.hWalls:st.vWalls).add(key(bestAction.i, bestAction.j));
+        st.wallsLeft[me]--;
+      }
+    } else {
+      state.history.pop();
+    }
+
+    state.aiThinking = false;
+    if(checkWin()){ render(); return; }
+    state.turn = 0;
+    render();
+  }
+
+  // ---------- boot ----------
+  state = freshState();
+  buildGrid();
+  ensurePawns();
+  render();
+
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+    });
+  }
+})();
+</script>
+</body>
+</html>
