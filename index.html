@@ -23,6 +23,8 @@
     --p2:#e0342c;
     --wall:#111111;
     --wall-ghost:rgba(224,52,44,.30);
+    --wall-preview-color:var(--p1);
+    --wall-cursor-color:var(--p1);
     --shadow:0 1px 2px rgba(0,0,0,.06);
   }
   html[data-theme="dark"]{
@@ -39,6 +41,8 @@
     --p2:#ff453a;
     --wall:#ffffff;
     --wall-ghost:rgba(255,69,58,.30);
+    --wall-preview-color:var(--p1);
+    --wall-cursor-color:var(--p1);
     --shadow:none;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
@@ -242,7 +246,7 @@
     position:absolute;
     z-index:5;
     background:transparent;
-    border:2.5px solid #2ecc40;
+    border:2.5px solid var(--wall-preview-color);
     border-radius:3px;
     opacity:0;
     pointer-events:none;
@@ -254,7 +258,7 @@
     position:absolute;
     z-index:7;
     background:transparent;
-    border:2.5px solid var(--accent);
+    border:2.5px solid var(--wall-cursor-color);
     border-radius:3px;
     opacity:0;
     pointer-events:none;
@@ -438,6 +442,8 @@
       wallsLeft: [WALLS_PER_PLAYER, WALLS_PER_PLAYER],
       hWalls: new Set(),
       vWalls: new Set(),
+      hWallOwners: new Map(),
+      vWallOwners: new Map(),
       turn: 0,
       mode: 'ai',
       interactionMode: 'move',
@@ -628,6 +634,7 @@
       const [i,j] = k.split(',').map(Number);
       const w = document.createElement('div');
       w.className='wall-piece';
+      w.style.background = 'var(--p'+((state.hWallOwners.get(k) ?? 0)+1)+')';
       w.style.left=(j*cellPct)+'%';
       w.style.width=(cellPct*2)+'%';
       w.style.top=((i+1)*cellPct - thickness/2)+'%';
@@ -638,6 +645,7 @@
       const [i,j] = k.split(',').map(Number);
       const w = document.createElement('div');
       w.className='wall-piece';
+      w.style.background = 'var(--p'+((state.vWallOwners.get(k) ?? 0)+1)+')';
       w.style.top=(i*cellPct)+'%';
       w.style.height=(cellPct*2)+'%';
       w.style.left=((j+1)*cellPct - thickness/2)+'%';
@@ -709,6 +717,8 @@
       wallsLeft: state.wallsLeft.slice(),
       hWalls: new Set(state.hWalls),
       vWalls: new Set(state.vWalls),
+      hWallOwners: new Map(state.hWallOwners),
+      vWallOwners: new Map(state.vWallOwners),
       turn: state.turn
     };
   }
@@ -750,9 +760,16 @@
     return {i,j};
   }
 
+  function setWallPreviewColors(){
+    const color = getComputedStyle(document.documentElement).getPropertyValue('--p'+(state.turn+1)).trim();
+    previewEl.style.setProperty('--wall-preview-color', color);
+    cursorEl.style.setProperty('--wall-cursor-color', color);
+  }
+
   function updatePreview(type,i,j,valid){
     const cellPct = 100/9;
     const thickness = cellPct*0.18;
+    setWallPreviewColors();
     previewEl.classList.add('show');
     previewEl.classList.toggle('invalid', !valid);
     if(type==='h'){
@@ -772,6 +789,7 @@
     const cellPct = 100/9;
     const length = cellPct*2;
     const thickness = cellPct*0.18;
+    setWallPreviewColors();
     cursorEl.classList.add('show');
     if(type==='h'){
       cursorEl.style.width=length+'%';
@@ -821,7 +839,9 @@
       hidePreview();
       if(last.valid){
         pushHistory();
-        (last.type==='h'?state.hWalls:state.vWalls).add(key(last.i,last.j));
+        const wallKey = key(last.i,last.j);
+        (last.type==='h'?state.hWalls:state.vWalls).add(wallKey);
+        (last.type==='h'?state.hWallOwners:state.vWallOwners).set(wallKey, state.turn);
         state.wallsLeft[state.turn]--;
         state.interactionMode = 'move';
         state.turn = 1-state.turn;
@@ -857,7 +877,9 @@
     if(!state.history.length) return;
     const snap = state.history.pop();
     state.pos = snap.pos; state.wallsLeft = snap.wallsLeft;
-    state.hWalls = snap.hWalls; state.vWalls = snap.vWalls; state.turn = snap.turn;
+    state.hWalls = snap.hWalls; state.vWalls = snap.vWalls;
+    state.hWallOwners = snap.hWallOwners; state.vWallOwners = snap.vWallOwners;
+    state.turn = snap.turn;
     state.winner = null; state.interactionMode='move';
     hidePreview();
     render();
@@ -944,6 +966,98 @@
     return Array.from(zones).map(k=>{ const [i,j]=k.split(',').map(Number); return {i,j}; });
   }
 
+  function shortestPathStats(startR, startC, goalRow, hSet, vSet){
+    // Count shortest routes as well as their length. A small cap keeps this
+    // inexpensive on the 9x9 board while still revealing route bottlenecks.
+    const dist = Array.from({length:9},()=>Array(9).fill(Infinity));
+    const ways = Array.from({length:9},()=>Array(9).fill(0));
+    const q=[[startR,startC]];
+    let head=0; dist[startR][startC]=0; ways[startR][startC]=1;
+    while(head<q.length){
+      const [r,c]=q[head++];
+      const d=dist[r][c];
+      for(const [dr,dc] of [[1,0],[-1,0],[0,1],[0,-1]]){
+        const nr=r+dr,nc=c+dc;
+        if(!inBounds(nr,nc) || wallBlocks(r,c,dr,dc,hSet,vSet)) continue;
+        const nd=d+1;
+        if(nd<dist[nr][nc]){
+          dist[nr][nc]=nd;
+          ways[nr][nc]=ways[r][c];
+          q.push([nr,nc]);
+        }else if(nd===dist[nr][nc]){
+          ways[nr][nc]=Math.min(1000000, ways[nr][nc]+ways[r][c]);
+        }
+      }
+    }
+    let best=Infinity, count=0;
+    for(let c=0;c<9;c++){
+      if(dist[goalRow][c]<best){ best=dist[goalRow][c]; count=ways[goalRow][c]; }
+      else if(dist[goalRow][c]===best){ count=Math.min(1000000,count+ways[goalRow][c]); }
+    }
+    return {length:best, shortestRoutes:count};
+  }
+
+  function evaluateWallAction(player, type, i, j, st){
+    if(!canPlaceWallFor(type,i,j,player,st)) return null;
+
+    // Evaluate the wall against the actual current board. A legal wall is
+    // not automatically a useful wall: it must change the opponent's route
+    // and must not hurt our own route more than it helps the opponent.
+    const opp = 1-player;
+    const ownPathBefore = bfsPathLen(
+      st.pos[player][0], st.pos[player][1], goalRowFor(player),
+      st.hWalls, st.vWalls
+    );
+    const oppPathBefore = bfsPathLen(
+      st.pos[opp][0], st.pos[opp][1], goalRowFor(opp),
+      st.hWalls, st.vWalls
+    );
+
+    const ns = applyAction(st, player, {type:'wall', wtype:type, i, j});
+    const ownPathAfter = bfsPathLen(
+      ns.pos[player][0], ns.pos[player][1], goalRowFor(player),
+      ns.hWalls, ns.vWalls
+    );
+    const oppPathAfter = bfsPathLen(
+      ns.pos[opp][0], ns.pos[opp][1], goalRowFor(opp),
+      ns.hWalls, ns.vWalls
+    );
+
+    const oppIncrease = oppPathAfter - oppPathBefore;
+    const ownIncrease = ownPathAfter - ownPathBefore;
+
+    const oppRoutesBefore = shortestPathStats(
+      st.pos[opp][0], st.pos[opp][1], goalRowFor(opp), st.hWalls, st.vWalls
+    );
+    const oppRoutesAfter = shortestPathStats(
+      ns.pos[opp][0], ns.pos[opp][1], goalRowFor(opp), ns.hWalls, ns.vWalls
+    );
+    const routeReduction = Math.max(0, oppRoutesBefore.shortestRoutes - oppRoutesAfter.shortestRoutes);
+
+    // Priority 1: reject walls with no actual effect on the opponent, and
+    // reject walls whose own-route cost is greater than their benefit.
+    if(oppIncrease <= 0) return null;
+    if(!isFinite(ownPathAfter) || !isFinite(oppPathAfter)) return null;
+    if(ownIncrease > oppIncrease) return null;
+
+    const remaining = st.wallsLeft[player];
+
+    // Priority 3: wall inventory is a strategic resource. With only one
+    // wall left, spend it only on a clearly meaningful detour. With two
+    // walls left, require a substantial effect unless the wall also leaves
+    // our route unchanged. This prevents the bot from burning its reserve
+    // on +1 detours that do not materially change the position.
+    if(remaining === 1 && !(oppIncrease >= 2 && ownIncrease <= 0)) return null;
+    if(remaining === 2 && !(oppIncrease >= 2 && oppIncrease > ownIncrease)) return null;
+
+    return {
+      opponentPathIncrease: oppIncrease,
+      ownPathIncrease: ownIncrease,
+      routeReduction,
+      score: oppIncrease - ownIncrease + Math.min(3, routeReduction) * 0.35
+    };
+  }
+
   function candidateActionsFor(player, st){
     const actions = [];
     for(const [r,c] of legalPawnMoves(player, st)){
@@ -952,8 +1066,9 @@
     if(st.wallsLeft[player] > 0){
       for(const {i,j} of wallCandidateZones(st)){
         for(const wtype of ['h','v']){
-          if(canPlaceWallFor(wtype,i,j,player,st)){
-            actions.push({type:'wall', wtype, i, j});
+          const wallEval = evaluateWallAction(player, wtype, i, j, st);
+          if(wallEval){
+            actions.push({type:'wall', wtype, i, j, wallEval});
           }
         }
       }
@@ -966,30 +1081,93 @@
       pos:[st.pos[0].slice(), st.pos[1].slice()],
       wallsLeft: st.wallsLeft.slice(),
       hWalls: new Set(st.hWalls),
-      vWalls: new Set(st.vWalls)
+      vWalls: new Set(st.vWalls),
+      hWallOwners: new Map(st.hWallOwners),
+      vWallOwners: new Map(st.vWallOwners)
     };
     if(action.type==='move'){
       ns.pos[player] = [action.r, action.c];
     } else {
-      (action.wtype==='h'?ns.hWalls:ns.vWalls).add(key(action.i,action.j));
+      const wallKey = key(action.i, action.j);
+      (action.wtype==='h'?ns.hWalls:ns.vWalls).add(wallKey);
+      (action.wtype==='h'?ns.hWallOwners:ns.vWallOwners).set(wallKey, player);
       ns.wallsLeft[player]--;
     }
     return ns;
   }
 
+  function actionScore(player, st, action){
+    const ns = applyAction(st, player, action);
+    const opp = 1-player;
+    const myPathBefore = bfsPathLen(st.pos[player][0], st.pos[player][1], goalRowFor(player), st.hWalls, st.vWalls);
+    const oppPathBefore = bfsPathLen(st.pos[opp][0], st.pos[opp][1], goalRowFor(opp), st.hWalls, st.vWalls);
+    const myPathAfter = bfsPathLen(ns.pos[player][0], ns.pos[player][1], goalRowFor(player), ns.hWalls, ns.vWalls);
+    const oppPathAfter = bfsPathLen(ns.pos[opp][0], ns.pos[opp][1], goalRowFor(opp), ns.hWalls, ns.vWalls);
+
+    let score = evalScore(ns, player);
+
+    // Priority 4: evaluate the actual strategic state rather than relying
+    // on fixed board positions. The score becomes more movement-oriented
+    // when the AI is already ahead, more defensive when the opponent is
+    // close to winning, and more aggressive when the AI is behind.
+    const pathGapBefore = oppPathBefore - myPathBefore;
+    const opponentDanger = oppPathBefore <= 2;
+    const ownDanger = myPathBefore <= 2;
+    const ahead = pathGapBefore >= 2;
+    const behind = pathGapBefore <= -2;
+
+    if(action.type==='move'){
+      // Moving toward the goal is especially valuable when already ahead or
+      // when the AI itself is one or two steps from winning.
+      if(ahead) score += 0.7;
+      if(ownDanger) score += 1.4;
+      if(opponentDanger) score -= 0.2;
+      if(behind) score -= 0.15;
+    } else {
+      const w = action.wallEval;
+      score += 0.8*w.score;
+
+      // Prefer walls that reduce the opponent's number of equally short
+      // routes. This rewards bottleneck control without requiring a full
+      // graph-centrality analysis.
+      if(w.routeReduction > 0){
+        score += Math.min(2.0, w.routeReduction * 0.25);
+      }
+
+      // A wall is primarily defensive when the opponent is close to winning,
+      // and primarily offensive when the AI is behind. When the AI is ahead,
+      // preserving the lead and reaching the goal is preferred.
+      if(opponentDanger) score += 2.0 + Math.max(0, w.opponentPathIncrease-1)*0.8;
+      if(ownDanger) score -= 1.2;
+      if(behind) score += 0.8;
+      if(ahead) score -= 0.9;
+
+      // Preserve the remaining wall supply, especially when only 1-2 walls
+      // remain. A wall must therefore provide a clear tactical benefit to
+      // justify consuming the resource.
+      const remaining = st.wallsLeft[player];
+      if(remaining === 1) score -= 1.5;
+      else if(remaining === 2) score -= 0.9;
+      else if(remaining <= 4) score -= 0.35;
+      else if(remaining >= 8) score += 0.08;
+    }
+
+    return score;
+  }
+
   function bestGreedyAction(player, st){
     let best=null, bestScore=-Infinity;
     for(const action of candidateActionsFor(player, st)){
-      const ns = applyAction(st, player, action);
-      const sc = evalScore(ns, player);
+      const sc = actionScore(player, st, action);
       if(sc > bestScore){ bestScore=sc; best=action; }
     }
     return {action:best, score:bestScore};
   }
 
-  // AI looks two half-moves ahead: for each of its own promising options it
-  // assumes the opponent then plays their single best reply, and picks the
-  // option that leaves the AI best off after that reply.
+  // Priority 6: limited lookahead. For each promising AI action, inspect the
+  // opponent's strongest reply and then evaluate the resulting position using
+  // the same strategic action evaluator. This is deliberately shallow: one
+  // AI move -> one opponent reply, keeping the browser responsive.
   function aiTakeTurn(){
     const st = state;
     const me = 1, opp = 0;
@@ -997,16 +1175,33 @@
     const myActions = candidateActionsFor(me, st);
     const scored = myActions.map(a=>{
       const ns = applyAction(st, me, a);
-      return {a, ns, imm: evalScore(ns, me)};
+      return {a, ns, imm: actionScore(me, st, a)};
     }).sort((x,y)=>y.imm-x.imm);
 
+    // Keep the search intentionally shallow and bounded. Ten candidate AI
+    // actions plus one best opponent reply is enough to add foresight without
+    // making every turn expensive.
     const K = Math.min(10, scored.length);
     let bestAction=null, bestVal=-Infinity;
     for(let idx=0; idx<K; idx++){
       const {a, ns} = scored[idx];
       const oppReply = bestGreedyAction(opp, ns);
       const afterState = oppReply.action ? applyAction(ns, opp, oppReply.action) : ns;
-      const val = evalScore(afterState, me);
+
+      // Evaluate the actual resulting state, including the strategic context
+      // (path gap, danger state, wall inventory and route structure).
+      let val = evalScore(afterState, me);
+      if(oppReply.action){
+        val += 0.25 * (actionScore(opp, ns, oppReply.action) * -1);
+      }
+
+      // Preserve an immediate winning move and strongly prefer actions that
+      // prevent an opponent win on the next turn.
+      const myAfterPath = bfsPathLen(afterState.pos[me][0], afterState.pos[me][1], goalRowFor(me), afterState.hWalls, afterState.vWalls);
+      const oppAfterPath = bfsPathLen(afterState.pos[opp][0], afterState.pos[opp][1], goalRowFor(opp), afterState.hWalls, afterState.vWalls);
+      if(myAfterPath===0) val += 100;
+      if(oppAfterPath===0) val -= 100;
+
       if(val > bestVal){ bestVal = val; bestAction = a; }
     }
     if(!bestAction && scored.length){ bestAction = scored[0].a; }
@@ -1016,7 +1211,9 @@
       if(bestAction.type==='move'){
         st.pos[me] = [bestAction.r, bestAction.c];
       } else {
-        (bestAction.wtype==='h'?st.hWalls:st.vWalls).add(key(bestAction.i, bestAction.j));
+        const wallKey = key(bestAction.i, bestAction.j);
+        (bestAction.wtype==='h'?st.hWalls:st.vWalls).add(wallKey);
+        (bestAction.wtype==='h'?st.hWallOwners:st.vWallOwners).set(wallKey, me);
         st.wallsLeft[me]--;
       }
     } else {
