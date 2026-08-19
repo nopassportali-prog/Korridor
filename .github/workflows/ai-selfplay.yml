@@ -1,1 +1,35 @@
 
+name: AI Self-Play
+
+on:
+  workflow_dispatch:
+
+jobs:
+  selfplay:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          npm ci || true
+          npm install puppeteer@20 --no-audit --no-fund
+
+      - name: Run self-play (headless)
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+        run: |
+          node tools/run_selfplay.js --games 200
+
+      - name: Upload metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-selfplay-metrics
+          path: ./selfplay-metrics.json
