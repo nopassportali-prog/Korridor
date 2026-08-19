@@ -1,4 +1,3 @@
-
 // tools/run_selfplay.js
 const puppeteer = require('puppeteer');
 const path = require('path');
