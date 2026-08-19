@@ -1,4 +1,3 @@
-
 // ai_improved.js
 // Injected improved AI for Korridor. This script overrides maybeAiMove and
 // provides an improved decision pipeline while reusing the game's existing
