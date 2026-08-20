@@ -17,30 +17,30 @@
     --cell-a:#ffffff;
     --cell-b:#f4f4f5;
     --surface:#f7f7f8;
-    --accent:#e0342c;
+    --accent:#111111;
     --accent-ink:#ffffff;
     --p1:#111111;
-    --p2:#e0342c;
+    --p2:#8a2b0e;
     --wall:#111111;
-    --wall-ghost:rgba(224,52,44,.30);
+    --wall-ghost:rgba(17,17,17,.20);
     --wall-preview-color:var(--p1);
     --wall-cursor-color:var(--p1);
     --shadow:0 1px 2px rgba(0,0,0,.06);
   }
   html[data-theme="dark"]{
     --bg:#000000;
-    --ink:#ffffff;
-    --muted:#8a8a8e;
-    --line:#232325;
+    --ink:#f2f0ef;
+    --muted:#bbbdbc;
+    --line:#2a2a2a;
     --cell-a:#000000;
-    --cell-b:#111113;
-    --surface:#0d0d0f;
-    --accent:#ff453a;
-    --accent-ink:#ffffff;
-    --p1:#ffffff;
-    --p2:#ff453a;
-    --wall:#ffffff;
-    --wall-ghost:rgba(255,69,58,.30);
+    --cell-b:#141414;
+    --surface:#161616;
+    --accent:#245f73;
+    --accent-ink:#f2f0ef;
+    --p1:#245f73;
+    --p2:#733e24;
+    --wall:#245f73;
+    --wall-ghost:rgba(36,95,115,.30);
     --wall-preview-color:var(--p1);
     --wall-cursor-color:var(--p1);
     --shadow:none;
@@ -331,9 +331,10 @@
     opacity:0; pointer-events:none;
     transition:opacity .25s ease;
   }
-  html[data-theme="dark"] .overlay{background:rgba(255,255,255,.08);}
+  html[data-theme="dark"] .overlay{background:rgba(220,217,210,.08);}
   .overlay.show{opacity:1; pointer-events:auto;}
   .overlay-card{
+    position:relative;
     background:var(--bg);
     border:1px solid var(--line);
     border-radius:16px;
@@ -341,6 +342,23 @@
     text-align:center;
     max-width:300px;
     box-shadow:0 20px 40px rgba(0,0,0,.2);
+  }
+  .overlay-close{
+    position:absolute;
+    top:10px;
+    right:10px;
+    width:30px;
+    height:30px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--surface);
+    color:var(--ink);
+    font-size:15px;
+    line-height:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
   }
   .overlay-card .win-dot{
     width:36px;height:36px;border-radius:50%;
@@ -406,6 +424,7 @@
 
 <div class="overlay" id="overlay">
   <div class="overlay-card">
+    <button class="overlay-close" id="overlayCloseBtn" aria-label="Schließen">&#10005;</button>
     <div class="win-dot" id="winDot"></div>
     <h2 id="winTitle">Gewonnen!</h2>
     <p id="winSub"></p>
@@ -748,8 +767,8 @@
   }
 
   // Orientation is fixed beforehand via the "Waagerecht"/"Senkrecht" buttons.
-  // The red bar follows the finger exactly, wherever it goes on the board.
-  // The green bar snaps to the nearest valid wall position - that's where
+  // The bar follows the finger exactly, wherever it goes on the board.
+  // The second bar snaps to the nearest valid wall position - that's where
   // the wall actually lands when the finger lifts.
   function nearestIntersection(xPct, yPct){
     const cellPct = 100/9;
@@ -891,6 +910,10 @@
     state.mode = mode;
     ensurePawns();
     render();
+  });
+
+  document.getElementById('overlayCloseBtn').addEventListener('click', ()=>{
+    document.getElementById('overlay').classList.remove('show');
   });
 
   document.getElementById('playAgainBtn').addEventListener('click', ()=>{
